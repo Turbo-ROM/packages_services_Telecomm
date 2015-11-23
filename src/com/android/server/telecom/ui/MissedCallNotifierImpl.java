@@ -192,6 +192,8 @@ public class MissedCallNotifierImpl extends CallsManagerListenerBase implements 
                 .setWhen(call.getCreationTimeMillis())
                 .setContentIntent(createCallLogPendingIntent())
                 .setAutoCancel(true)
+                .setContentTitle(mContext.getText(titleResId))
+                .setContentText(expandedText)
                 .setDeleteIntent(createClearMissedCallsPendingIntent());
             } else {
             builder.setSmallIcon(android.R.drawable.stat_notify_missed_call)
@@ -199,7 +201,9 @@ public class MissedCallNotifierImpl extends CallsManagerListenerBase implements 
                 .setWhen(call.getCreationTimeMillis())
                 .setContentIntent(createCallLogPendingIntent())
                 .setAutoCancel(true)
-                .setDeleteIntent(createClearMissedCallsPendingIntent());
+                .setContentTitle(mContext.getText(titleResId))
+                .setContentText(expandedText)
+                .setDeleteIntent(createClearMissedCallsPendingIntent())
                 // Include a public version of the notification to be shown when the missed call
                 // notification is shown on the user's lock screen and they have chosen to hide
                 // sensitive notification information.
