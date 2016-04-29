@@ -44,6 +44,7 @@ import android.telecom.TelecomManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.EventLog;
 
 // TODO: Needed for move to system service: import com.android.internal.R;
 import com.android.internal.telecom.ITelecomService;
@@ -320,7 +321,7 @@ public class TelecomServiceImpl {
                         Intent intent = new Intent(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
                         intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE,
                                 account.getAccountHandle());
-                        Log.i(this, "Sending phone-account intent as user");
+                        Log.i(this, "Sending phone-account registered intent as user");
                         mContext.sendBroadcastAsUser(intent, UserHandle.ALL,
                                 PERMISSION_PROCESS_PHONE_ACCOUNT_REGISTRATION);
                     } finally {
@@ -341,6 +342,19 @@ public class TelecomServiceImpl {
                             accountHandle.getComponentName().getPackageName());
                     enforceUserHandleMatchesCaller(accountHandle);
                     mPhoneAccountRegistrar.unregisterPhoneAccount(accountHandle);
+
+                    // Broadcast an intent indicating the phone account which was unregistered.
+                    long token = Binder.clearCallingIdentity();
+                    try {
+                        Intent intent =
+                                new Intent(TelecomManager.ACTION_PHONE_ACCOUNT_UNREGISTERED);
+                        intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, accountHandle);
+                        Log.i(this, "Sending phone-account unregistered intent as user");
+                        mContext.sendBroadcastAsUser(intent, UserHandle.ALL,
+                                PERMISSION_PROCESS_PHONE_ACCOUNT_REGISTRATION);
+                    } finally {
+                        Binder.restoreCallingIdentity(token);
+                    }
                 } catch (Exception e) {
                     Log.e(this, e, "unregisterPhoneAccount %s", accountHandle);
                     throw e;
@@ -766,6 +780,7 @@ public class TelecomServiceImpl {
                                 phoneAccountHandle.getComponentName().getPackageName());
                         // Make sure it doesn't cross the UserHandle boundary
                         enforceUserHandleMatchesCaller(phoneAccountHandle);
+                        enforcePhoneAccountIsRegisteredEnabled(phoneAccountHandle);
                     }
 
                     long token = Binder.clearCallingIdentity();
@@ -801,6 +816,7 @@ public class TelecomServiceImpl {
 
                     // Make sure it doesn't cross the UserHandle boundary
                     enforceUserHandleMatchesCaller(phoneAccountHandle);
+                    enforcePhoneAccountIsRegisteredEnabled(phoneAccountHandle);
                     long token = Binder.clearCallingIdentity();
 
                     try {
@@ -1078,6 +1094,21 @@ public class TelecomServiceImpl {
         }
 
         return false;
+    }
+
+    // Enforce that the PhoneAccountHandle being passed in is both registered to the current user
+    // and enabled.
+    private void enforcePhoneAccountIsRegisteredEnabled(PhoneAccountHandle phoneAccountHandle) {
+        PhoneAccount phoneAccount = mPhoneAccountRegistrar.getPhoneAccountCheckCallingUser(
+                phoneAccountHandle);
+        if (phoneAccount == null) {
+            EventLog.writeEvent(0x534e4554, "26864502", Binder.getCallingUid(), "R");
+            throw new SecurityException("This PhoneAccountHandle is not registered for this user!");
+        }
+        if (!phoneAccount.isEnabled()) {
+            EventLog.writeEvent(0x534e4554, "26864502", Binder.getCallingUid(), "E");
+            throw new SecurityException("This PhoneAccountHandle is not enabled for this user!");
+        }
     }
 
     private void enforcePhoneAccountModificationForPackage(String packageName) {
